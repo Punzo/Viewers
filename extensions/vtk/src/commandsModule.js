@@ -11,13 +11,16 @@ import setMPRLayout from './utils/setMPRLayout.js';
 import setViewportToVTK from './utils/setViewportToVTK.js';
 import Constants from 'vtk.js/Sources/Rendering/Core/VolumeMapper/Constants.js';
 import OHIFVTKViewport from './OHIFVTKViewport';
-import vtkCoordinate from 'vtk.js/Sources/Rendering/Core/Coordinate';
+import vtkImageData from 'vtk.js/Sources/Common/DataModel/ImageData';
+import vtkDataArray from 'vtk.js/Sources/Common/Core/DataArray';
 
 const { BlendMode } = Constants;
 
 const commandsModule = ({ commandsManager }) => {
   // TODO: Put this somewhere else
   let apis = {};
+  let vtkImageDataCache = null;
+  let thresholdCache = 50;
 
   async function _getActiveViewportVTKApi(viewports) {
     const {
@@ -165,7 +168,7 @@ const commandsModule = ({ commandsManager }) => {
       segmentNumber,
       frameIndex,
       frame,
-      done = () => { }
+      done = () => {},
     }) => {
       let api = apis[viewports.activeViewportIndex];
 
@@ -180,10 +183,13 @@ const commandsModule = ({ commandsManager }) => {
         displaySetInstanceUID,
         SOPClassUID,
         SOPInstanceUID,
-        frameIndex,
+        frameIndex
       );
 
-      const imageDataObject = getImageData(stack.imageIds, displaySetInstanceUID);
+      const imageDataObject = getImageData(
+        stack.imageIds,
+        displaySetInstanceUID
+      );
 
       let pixelIndex = 0;
       let x = 0;
@@ -209,7 +215,10 @@ const commandsModule = ({ commandsManager }) => {
       y /= count;
 
       const position = [x, y, frameIndex];
-      const worldPos = _convertModelToWorldSpace(position, imageDataObject.vtkImageData);
+      const worldPos = _convertModelToWorldSpace(
+        position,
+        imageDataObject.vtkImageData
+      );
 
       api.svgWidgets.crosshairsWidget.moveCrosshairs(worldPos, apis);
       done();
@@ -260,6 +269,90 @@ const commandsModule = ({ commandsManager }) => {
         api.setInteractorStyle({ istyle });
       });
     },
+    enableThresholdTool: async ({ viewports }) => {
+      let api = apis[viewports.activeViewportIndex];
+      if (!api) {
+        api = await _getActiveViewportVTKApi(viewports);
+        apis[viewports.activeViewportIndex] = api;
+      }
+
+      const volume = api.volumes[0];
+      const mapper = volume.getMapper();
+      const imageData = mapper.getInputData();
+
+      if (!vtkImageDataCache) {
+        vtkImageDataCache = vtkImageData.newInstance();
+
+        vtkImageDataCache.setExtent(imageData.getExtent());
+        vtkImageDataCache.setSpacing(imageData.getSpacing());
+        vtkImageDataCache.setOrigin(imageData.getOrigin());
+        const cacheArray = imageData
+          .getPointData()
+          .getScalars()
+          .getData();
+
+        const scalarCache = vtkDataArray.newInstance({
+          numberOfComponents: 1,
+          values: cacheArray,
+        });
+        scalarCache.setName('scalars');
+        vtkImageDataCache.getPointData().setScalars(scalarCache);
+      }
+
+      const dims = [
+        imageData.getExtent()[1] + 1,
+        imageData.getExtent()[3] + 1,
+        imageData.getExtent()[5] + 1,
+      ];
+
+      const array = vtkImageDataCache
+        .getPointData()
+        .getScalars()
+        .getData();
+
+      const newArray = new Float32Array(dims[0] * dims[1] * dims[2]);
+
+      let i = 0;
+      for (let z = 0; z < dims[2]; z++) {
+        for (let y = 0; y < dims[1]; y++) {
+          for (let x = 0; x < dims[0]; x++) {
+            if (array[i] < thresholdCache) {
+              newArray[i] = 0;
+            } else {
+              newArray[i] = array[i];
+            }
+            i++;
+          }
+        }
+      }
+
+      const da = vtkDataArray.newInstance({
+        numberOfComponents: 1,
+        values: newArray,
+      });
+      da.setName('scalars');
+      imageData.getPointData().setScalars(da);
+      imageData.modified();
+
+      mapper.setInputData(imageData);
+
+      let [lower, upper] = volume
+        .getProperty()
+        .getRGBTransferFunction(0)
+        .getRange();
+
+      lower = -100;
+
+      volume
+        .getProperty()
+        .getRGBTransferFunction(0)
+        .setRange(lower, upper);
+
+      apis.forEach((api, apiIndex) => {
+        const renderWindow = api.genericRenderWindow.getRenderWindow();
+        renderWindow.render();
+      });
+    },
     enableCrosshairsTool: () => {
       apis.forEach((api, apiIndex) => {
         const istyle = vtkInteractorStyleMPRCrosshairs.newInstance();
@@ -308,6 +401,9 @@ const commandsModule = ({ commandsManager }) => {
 
         api.setSlabThickness(slabThickness);
       });
+    },
+    changeThreshold: ({ change }) => {
+      thresholdCache = thresholdCache + change;
     },
     setBlendModeToComposite: () => {
       apis.forEach(api => {
@@ -448,6 +544,11 @@ const commandsModule = ({ commandsManager }) => {
       commandFn: actions.enableRotateTool,
       options: {},
     },
+    enableThresholdTool: {
+      commandFn: actions.enableThresholdTool,
+      storeContexts: ['viewports'],
+      options: {},
+    },
     enableCrosshairsTool: {
       commandFn: actions.enableCrosshairsTool,
       options: {},
@@ -487,6 +588,18 @@ const commandsModule = ({ commandsManager }) => {
       commandFn: actions.changeSlabThickness,
       options: {
         change: -3,
+      },
+    },
+    increaseThreshold: {
+      commandFn: actions.changeThreshold,
+      options: {
+        change: 50,
+      },
+    },
+    decreaseThreshold: {
+      commandFn: actions.changeThreshold,
+      options: {
+        change: -50,
       },
     },
     mpr2d: {

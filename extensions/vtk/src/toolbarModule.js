@@ -34,6 +34,33 @@ const definitions = [
     commandName: 'enableRotateTool',
     commandOptions: {},
   },
+  {
+    id: 'Threshold',
+    label: 'Threshold',
+    icon: 'cube',
+    //
+    type: TOOLBAR_BUTTON_TYPES.SET_TOOL_ACTIVE,
+    commandName: 'enableThresholdTool',
+    commandOptions: {},
+  },
+  {
+    id: 'increaseThreshold',
+    label: 'Increase Threshold',
+    icon: 'caret-up',
+    //
+    type: TOOLBAR_BUTTON_TYPES.COMMAND,
+    commandName: 'increaseThreshold',
+    commandOptions: {},
+  },
+  {
+    id: 'decreaseThreshold',
+    label: 'Decrease Threshold',
+    icon: 'caret-down',
+    //
+    type: TOOLBAR_BUTTON_TYPES.COMMAND,
+    commandName: 'decreaseThreshold',
+    commandOptions: {},
+  },
   /*
   {
     id: 'setBlendModeToComposite',
@@ -131,4 +158,4 @@ const definitions = [
 export default {
   definitions,
   defaultContext: 'ACTIVE_VIEWPORT::VTK',
-}
+};
