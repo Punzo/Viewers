@@ -33,6 +33,7 @@ import OHIFDicomTagBrowserExtension from '@ohif/extension-dicom-tag-browser';
 // Add this for Debugging purposes:
 //import OHIFDebuggingExtension from '@ohif/extension-debugging';
 import { version } from '../package.json';
+import SegmentationTools from '../../../extensions/segmentationTools/src/index';
 
 /*
  * Default Settings
@@ -55,6 +56,7 @@ const appProps = {
     OHIFDicomSegmentationExtension,
     OHIFDicomRtExtension,
     OHIFDicomTagBrowserExtension,
+    SegmentationTools,
     //OHIFDebuggingExtension,
   ],
 };
